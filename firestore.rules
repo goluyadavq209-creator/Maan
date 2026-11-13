@@ -1,0 +1,294 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL HARDENED HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email_verified == true && request.auth.token.email == 'maansinghyadav095@gmail.com')
+      );
+    }
+
+    // --- VALIDATION HELPERS ---
+    function isValidUser(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.email is string && data.email.size() >= 3 && data.email.size() <= 254 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+             data.role in ['creator', 'admin'] &&
+             data.isBlocked is bool &&
+             (!('photoUrl' in data) || data.photoUrl == null || (data.photoUrl is string && data.photoUrl.size() <= 500)) &&
+             (!('bio' in data) || data.bio == null || (data.bio is string && data.bio.size() <= 300)) &&
+             (!('notifyOnPublish' in data) || data.notifyOnPublish is bool) &&
+             (!('notifyOnFailure' in data) || data.notifyOnFailure is bool) &&
+             (!('lastActiveAt' in data) || (data.lastActiveAt is timestamp && data.lastActiveAt <= request.time)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidSocialAccount(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.platform in ['instagram', 'facebook', 'youtube'] &&
+             data.accountName is string && data.accountName.size() >= 1 && data.accountName.size() <= 120 &&
+             data.accountHandle is string && data.accountHandle.size() >= 1 && data.accountHandle.size() <= 120 &&
+             data.status in ['connected', 'api_required', 'expired', 'disconnected'] &&
+             data.oauthMode in ['backend_relay', 'pkce_oauth', 'unconfigured'] &&
+             (!('externalAccountId' in data) || data.externalAccountId == null || (data.externalAccountId is string && data.externalAccountId.size() <= 128)) &&
+             (!('pageId' in data) || data.pageId == null || (data.pageId is string && data.pageId.size() <= 128)) &&
+             (!('pageName' in data) || data.pageName == null || (data.pageName is string && data.pageName.size() <= 120)) &&
+             (!('avatarUrl' in data) || data.avatarUrl == null || (data.avatarUrl is string && data.avatarUrl.size() <= 500)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidVideo(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 150 &&
+             data.status in ['draft', 'ready', 'publishing', 'published', 'partial', 'failed'] &&
+             data.durationSeconds is int && data.durationSeconds >= 0 && data.durationSeconds <= 3600 &&
+             data.fileSizeBytes is int && data.fileSizeBytes >= 0 && data.fileSizeBytes <= 2147483648 &&
+             (!('description' in data) || data.description == null || (data.description is string && data.description.size() <= 2200)) &&
+             (!('captionInstagram' in data) || data.captionInstagram == null || (data.captionInstagram is string && data.captionInstagram.size() <= 2200)) &&
+             (!('captionFacebook' in data) || data.captionFacebook == null || (data.captionFacebook is string && data.captionFacebook.size() <= 2200)) &&
+             (!('captionYoutube' in data) || data.captionYoutube == null || (data.captionYoutube is string && data.captionYoutube.size() <= 5000)) &&
+             (!('hashtags' in data) || (data.hashtags is list && data.hashtags.size() <= 20 && (data.hashtags.size() == 0 || (data.hashtags[0] is string && data.hashtags[0].size() <= 60)))) &&
+             (!('localUri' in data) || data.localUri == null || (data.localUri is string && data.localUri.size() <= 500)) &&
+             (!('thumbnailUri' in data) || data.thumbnailUri == null || (data.thumbnailUri is string && data.thumbnailUri.size() <= 500)) &&
+             (!('aspectRatio' in data) || data.aspectRatio == null || (data.aspectRatio is string && data.aspectRatio.size() <= 20)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidPublishingJob(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.videoId is string && isValidId(data.videoId) &&
+             data.videoTitle is string && data.videoTitle.size() >= 1 && data.videoTitle.size() <= 150 &&
+             data.platform in ['instagram', 'facebook', 'youtube'] &&
+             data.status in ['queued', 'uploading', 'success', 'failed', 'api_connection_required'] &&
+             data.progressPercent is int && data.progressPercent >= 0 && data.progressPercent <= 100 &&
+             data.retryCount is int && data.retryCount >= 0 && data.retryCount <= 20 &&
+             (!('caption' in data) || data.caption == null || (data.caption is string && data.caption.size() <= 5000)) &&
+             (!('externalPostUrl' in data) || data.externalPostUrl == null || (data.externalPostUrl is string && data.externalPostUrl.size() <= 500)) &&
+             (!('errorMessage' in data) || data.errorMessage == null || (data.errorMessage is string && data.errorMessage.size() <= 1000)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidScheduledPost(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.videoId is string && isValidId(data.videoId) &&
+             data.videoTitle is string && data.videoTitle.size() >= 1 && data.videoTitle.size() <= 150 &&
+             data.platforms is list && data.platforms.size() >= 1 && data.platforms.size() <= 3 &&
+             data.platforms.hasOnly(['instagram', 'facebook', 'youtube']) &&
+             data.scheduledForMillis is int && data.scheduledForMillis > 0 &&
+             data.status in ['scheduled', 'processing', 'completed', 'failed', 'cancelled'] &&
+             (!('captionInstagram' in data) || data.captionInstagram == null || (data.captionInstagram is string && data.captionInstagram.size() <= 2200)) &&
+             (!('captionFacebook' in data) || data.captionFacebook == null || (data.captionFacebook is string && data.captionFacebook.size() <= 2200)) &&
+             (!('captionYoutube' in data) || data.captionYoutube == null || (data.captionYoutube is string && data.captionYoutube.size() <= 5000)) &&
+             (!('errorMessage' in data) || data.errorMessage == null || (data.errorMessage is string && data.errorMessage.size() <= 1000)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidAdminLog(data) {
+      return data.actorId is string && data.actorId.size() >= 1 && data.actorId.size() <= 128 &&
+             data.actorEmail is string && data.actorEmail.size() >= 3 && data.actorEmail.size() <= 254 &&
+             data.action is string && data.action.size() >= 1 && data.action.size() <= 100 &&
+             data.severity in ['info', 'warning', 'error'] &&
+             data.details is string && data.details.size() >= 1 && data.details.size() <= 1000 &&
+             (!('platform' in data) || data.platform == null || (data.platform is string && data.platform.size() <= 40)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidSystemSettings(data) {
+      return data.maxDailyUploadsPerUser is int && data.maxDailyUploadsPerUser >= 1 && data.maxDailyUploadsPerUser <= 500 &&
+             data.maxVideoSizeMb is int && data.maxVideoSizeMb >= 10 && data.maxVideoSizeMb <= 2048 &&
+             data.maxVideoDurationSec is int && data.maxVideoDurationSec >= 15 && data.maxVideoDurationSec <= 600 &&
+             data.maintenanceMode is bool &&
+             data.updatedBy is string && data.updatedBy.size() >= 1 && data.updatedBy.size() <= 128 &&
+             (!('backendRelayUrl' in data) || data.backendRelayUrl == null || (data.backendRelayUrl is string && data.backendRelayUrl.size() <= 300)) &&
+             (!('metaAppId' in data) || data.metaAppId == null || (data.metaAppId is string && data.metaAppId.size() <= 128)) &&
+             (!('youtubeClientId' in data) || data.youtubeClientId == null || (data.youtubeClientId is string && data.youtubeClientId.size() <= 200)) &&
+             (!('appDownloadUrl' in data) || data.appDownloadUrl == null || (data.appDownloadUrl is string && data.appDownloadUrl.size() <= 500)) &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // --- COLLECTIONS ---
+
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && isValidId(adminId) && (request.auth.uid == adminId || isAdmin());
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin() && isValidId(adminId);
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isSignedIn() && isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'email', 'displayName', 'role', 'isBlocked', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'email', 'displayName', 'photoUrl', 'bio', 'role', 'isBlocked', 'notifyOnPublish', 'notifyOnFailure', 'lastActiveAt', 'createdAt', 'updatedAt']) &&
+                       isValidUser(incoming()) &&
+                       (incoming().role == 'creator' || (isAdmin() && incoming().role == 'admin')) &&
+                       incoming().isBlocked == false;
+
+      allow update: if isSignedIn() && isValidId(userId) &&
+                       isValidUser(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'isBlocked', 'displayName', 'bio', 'notifyOnPublish', 'notifyOnFailure', 'updatedAt'])) ||
+                         (request.auth.uid == userId &&
+                          incoming().role == existing().role &&
+                          incoming().isBlocked == existing().isBlocked &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoUrl', 'bio', 'notifyOnPublish', 'notifyOnFailure', 'lastActiveAt', 'updatedAt']))
+                       );
+
+      allow delete: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /social_accounts/{accountId} {
+      allow get: if isSignedIn() && isValidId(accountId) && (
+        (resource == null && accountId.matches('^' + request.auth.uid + '_(instagram|facebook|youtube)$')) ||
+        (resource != null && existing().userId == request.auth.uid) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(accountId) &&
+                       isValidSocialAccount(incoming()) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'platform', 'accountName', 'accountHandle', 'status', 'oauthMode', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'platform', 'accountName', 'accountHandle', 'externalAccountId', 'pageId', 'pageName', 'avatarUrl', 'status', 'oauthMode', 'createdAt', 'updatedAt']);
+
+      allow update: if isSignedIn() && isValidId(accountId) &&
+                       isValidSocialAccount(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().platform == existing().platform &&
+                       incoming().createdAt == existing().createdAt &&
+                       (isAdmin() || (existing().userId == request.auth.uid &&
+                        incoming().diff(existing()).affectedKeys().hasOnly(['accountName', 'accountHandle', 'externalAccountId', 'pageId', 'pageName', 'avatarUrl', 'status', 'oauthMode', 'updatedAt'])));
+
+      allow delete: if isSignedIn() && isValidId(accountId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    match /videos/{videoId} {
+      allow get: if isSignedIn() && isValidId(videoId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(videoId) &&
+                       isValidVideo(incoming()) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'title', 'status', 'durationSeconds', 'fileSizeBytes', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'title', 'description', 'captionInstagram', 'captionFacebook', 'captionYoutube', 'hashtags', 'localUri', 'thumbnailUri', 'durationSeconds', 'fileSizeBytes', 'aspectRatio', 'status', 'createdAt', 'updatedAt']);
+
+      allow update: if isSignedIn() && isValidId(videoId) &&
+                       isValidVideo(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (isAdmin() || (existing().userId == request.auth.uid &&
+                        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'captionInstagram', 'captionFacebook', 'captionYoutube', 'hashtags', 'localUri', 'thumbnailUri', 'durationSeconds', 'fileSizeBytes', 'aspectRatio', 'status', 'updatedAt'])));
+
+      allow delete: if isSignedIn() && isValidId(videoId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    match /publishing_jobs/{jobId} {
+      allow get: if isSignedIn() && isValidId(jobId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(jobId) &&
+                       isValidPublishingJob(incoming()) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'videoId', 'videoTitle', 'platform', 'status', 'progressPercent', 'retryCount', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'videoId', 'videoTitle', 'platform', 'caption', 'status', 'progressPercent', 'externalPostUrl', 'errorMessage', 'retryCount', 'createdAt', 'updatedAt']) &&
+                       exists(/databases/$(database)/documents/videos/$(incoming().videoId)) &&
+                       get(/databases/$(database)/documents/videos/$(incoming().videoId)).data.userId == request.auth.uid;
+
+      allow update: if isSignedIn() && isValidId(jobId) &&
+                       isValidPublishingJob(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().videoId == existing().videoId &&
+                       incoming().platform == existing().platform &&
+                       incoming().createdAt == existing().createdAt &&
+                       (isAdmin() || (existing().userId == request.auth.uid &&
+                        existing().status != 'success' &&
+                        incoming().diff(existing()).affectedKeys().hasOnly(['caption', 'status', 'progressPercent', 'externalPostUrl', 'errorMessage', 'retryCount', 'updatedAt'])));
+
+      allow delete: if isSignedIn() && isValidId(jobId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    match /scheduled_posts/{postId} {
+      allow get: if isSignedIn() && isValidId(postId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() && isValidId(postId) &&
+                       isValidScheduledPost(incoming()) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'videoId', 'videoTitle', 'platforms', 'scheduledForMillis', 'status', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'videoId', 'videoTitle', 'platforms', 'captionInstagram', 'captionFacebook', 'captionYoutube', 'scheduledForMillis', 'status', 'errorMessage', 'createdAt', 'updatedAt']) &&
+                       exists(/databases/$(database)/documents/videos/$(incoming().videoId)) &&
+                       get(/databases/$(database)/documents/videos/$(incoming().videoId)).data.userId == request.auth.uid;
+
+      allow update: if isSignedIn() && isValidId(postId) &&
+                       isValidScheduledPost(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().videoId == existing().videoId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (isAdmin() || (existing().userId == request.auth.uid &&
+                        !(existing().status in ['completed', 'cancelled']) &&
+                        incoming().diff(existing()).affectedKeys().hasOnly(['platforms', 'captionInstagram', 'captionFacebook', 'captionYoutube', 'scheduledForMillis', 'status', 'errorMessage', 'updatedAt'])));
+
+      allow delete: if isSignedIn() && isValidId(postId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    match /admin_logs/{logId} {
+      allow get: if isAdmin() && isValidId(logId);
+      allow list: if isAdmin();
+
+      allow create: if isSignedIn() && isValidId(logId) &&
+                       isValidAdminLog(incoming()) &&
+                       incoming().actorId == request.auth.uid &&
+                       incoming().keys().hasAll(['actorId', 'actorEmail', 'action', 'severity', 'details', 'createdAt']) &&
+                       incoming().keys().hasOnly(['actorId', 'actorEmail', 'action', 'platform', 'severity', 'details', 'createdAt']);
+
+      allow update: if false;
+      allow delete: if isAdmin() && isValidId(logId);
+    }
+
+    match /system_settings/{settingId} {
+      allow get: if isSignedIn() && isValidId(settingId);
+      allow list: if isSignedIn();
+
+      allow create, update: if isAdmin() && isValidId(settingId) &&
+                               isValidSystemSettings(incoming()) &&
+                               incoming().updatedBy == request.auth.uid &&
+                               incoming().keys().hasAll(['maxDailyUploadsPerUser', 'maxVideoSizeMb', 'maxVideoDurationSec', 'maintenanceMode', 'updatedBy', 'updatedAt']) &&
+                               incoming().keys().hasOnly(['maxDailyUploadsPerUser', 'maxVideoSizeMb', 'maxVideoDurationSec', 'maintenanceMode', 'backendRelayUrl', 'metaAppId', 'youtubeClientId', 'appDownloadUrl', 'updatedBy', 'updatedAt']);
+
+      allow delete: if isAdmin() && isValidId(settingId);
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Gyanverse Studio",
+  "description": "Create Once, Publish Everywhere — multi-user social video publishing platform for Instagram Reels, Facebook Reels, and YouTube Shorts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

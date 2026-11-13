@@ -1,0 +1,170 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered creator or super-admin profile in Gyanverse Studio.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the user." },
+        "email": { "type": "string", "description": "Verified Google email address." },
+        "displayName": { "type": "string", "description": "Creator display name." },
+        "photoUrl": { "type": "string", "description": "Profile avatar URL." },
+        "bio": { "type": "string", "description": "Creator channel bio." },
+        "role": { "type": "string", "enum": ["creator", "admin"], "description": "RBAC role." },
+        "isBlocked": { "type": "boolean", "description": "Whether the user is blocked by an administrator." },
+        "notifyOnPublish": { "type": "boolean", "description": "Push/in-app notification preference on publish completion." },
+        "notifyOnFailure": { "type": "boolean", "description": "Notification preference on API failure." },
+        "lastActiveAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last activity." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp at registration." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last profile update." }
+      },
+      "required": ["userId", "email", "displayName", "role", "isBlocked", "createdAt", "updatedAt"]
+    },
+    "SocialAccount": {
+      "title": "SocialAccount",
+      "description": "Connected Instagram, Facebook Page, or YouTube channel metadata (no secrets stored client-side).",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "platform": { "type": "string", "enum": ["instagram", "facebook", "youtube"], "description": "Target social platform." },
+        "accountName": { "type": "string", "description": "Channel or profile display name." },
+        "accountHandle": { "type": "string", "description": "Handle or @username." },
+        "externalAccountId": { "type": "string", "description": "Platform account or channel ID." },
+        "pageId": { "type": "string", "description": "Facebook Page ID when applicable." },
+        "pageName": { "type": "string", "description": "Facebook Page name when applicable." },
+        "avatarUrl": { "type": "string", "description": "Platform profile image URL." },
+        "status": { "type": "string", "enum": ["connected", "api_required", "expired", "disconnected"], "description": "OAuth connection status." },
+        "oauthMode": { "type": "string", "enum": ["backend_relay", "pkce_oauth", "unconfigured"], "description": "OAuth integration mode." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp when linked." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp when refreshed." }
+      },
+      "required": ["userId", "platform", "accountName", "accountHandle", "status", "oauthMode", "createdAt", "updatedAt"]
+    },
+    "VideoAsset": {
+      "title": "VideoAsset",
+      "description": "Uploaded or selected vertical video project with platform-specific captions and metadata.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "title": { "type": "string", "description": "Video title." },
+        "description": { "type": "string", "description": "Base description." },
+        "captionInstagram": { "type": "string", "description": "Instagram Reels caption." },
+        "captionFacebook": { "type": "string", "description": "Facebook Reels caption." },
+        "captionYoutube": { "type": "string", "description": "YouTube Shorts description." },
+        "hashtags": { "type": "array", "description": "Up to 20 hashtags." },
+        "localUri": { "type": "string", "description": "Local device content URI or cloud reference." },
+        "thumbnailUri": { "type": "string", "description": "Thumbnail reference." },
+        "durationSeconds": { "type": "integer", "description": "Video duration in seconds." },
+        "fileSizeBytes": { "type": "integer", "description": "File size in bytes." },
+        "aspectRatio": { "type": "string", "description": "Detected aspect ratio (e.g. 9:16)." },
+        "status": { "type": "string", "enum": ["draft", "ready", "publishing", "published", "partial", "failed"], "description": "Video lifecycle status." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp at creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp at update." }
+      },
+      "required": ["userId", "title", "status", "durationSeconds", "fileSizeBytes", "createdAt", "updatedAt"]
+    },
+    "PublishingJob": {
+      "title": "PublishingJob",
+      "description": "Per-platform publishing execution record and history entry.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "videoId": { "type": "string", "description": "Referenced VideoAsset document ID." },
+        "videoTitle": { "type": "string", "description": "Snapshot of video title." },
+        "platform": { "type": "string", "enum": ["instagram", "facebook", "youtube"], "description": "Destination platform." },
+        "caption": { "type": "string", "description": "Caption sent to the platform." },
+        "status": { "type": "string", "enum": ["queued", "uploading", "success", "failed", "api_connection_required"], "description": "Job status." },
+        "progressPercent": { "type": "integer", "description": "Upload progress 0-100." },
+        "externalPostUrl": { "type": "string", "description": "Live platform post URL once published." },
+        "errorMessage": { "type": "string", "description": "Actual API or configuration error message." },
+        "retryCount": { "type": "integer", "description": "Number of retry attempts." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp when queued." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of latest status." }
+      },
+      "required": ["userId", "videoId", "videoTitle", "platform", "status", "progressPercent", "retryCount", "createdAt", "updatedAt"]
+    },
+    "ScheduledPost": {
+      "title": "ScheduledPost",
+      "description": "Scheduled multi-platform video publish record processed by WorkManager / backend.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "videoId": { "type": "string", "description": "Referenced VideoAsset document ID." },
+        "videoTitle": { "type": "string", "description": "Video title." },
+        "platforms": { "type": "array", "description": "Selected platforms to publish." },
+        "captionInstagram": { "type": "string", "description": "Instagram caption." },
+        "captionFacebook": { "type": "string", "description": "Facebook caption." },
+        "captionYoutube": { "type": "string", "description": "YouTube caption." },
+        "scheduledForMillis": { "type": "integer", "description": "UTC epoch millis for scheduled execution." },
+        "status": { "type": "string", "enum": ["scheduled", "processing", "completed", "failed", "cancelled"], "description": "Schedule state." },
+        "errorMessage": { "type": "string", "description": "Failure reason if applicable." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp when scheduled." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of latest update." }
+      },
+      "required": ["userId", "videoId", "videoTitle", "platforms", "scheduledForMillis", "status", "createdAt", "updatedAt"]
+    },
+    "AdminLog": {
+      "title": "AdminLog",
+      "description": "System and API error audit log visible to super-administrators.",
+      "type": "object",
+      "properties": {
+        "actorId": { "type": "string", "description": "UID of user or admin triggering the event." },
+        "actorEmail": { "type": "string", "description": "Email of actor." },
+        "action": { "type": "string", "description": "Action identifier." },
+        "platform": { "type": "string", "description": "Related social platform or system." },
+        "severity": { "type": "string", "enum": ["info", "warning", "error"], "description": "Log severity." },
+        "details": { "type": "string", "description": "Diagnostic message." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp." }
+      },
+      "required": ["actorId", "actorEmail", "action", "severity", "details", "createdAt"]
+    },
+    "SystemSettings": {
+      "title": "SystemSettings",
+      "description": "Platform-wide free usage limits and public OAuth / relay endpoint settings.",
+      "type": "object",
+      "properties": {
+        "maxDailyUploadsPerUser": { "type": "integer", "description": "Fair-use daily upload cap for free users." },
+        "maxVideoSizeMb": { "type": "integer", "description": "Max video size in MB." },
+        "maxVideoDurationSec": { "type": "integer", "description": "Max short-form video duration in seconds." },
+        "maintenanceMode": { "type": "boolean", "description": "Global maintenance toggle." },
+        "backendRelayUrl": { "type": "string", "description": "Public Node.js publishing relay base URL." },
+        "metaAppId": { "type": "string", "description": "Public Meta App ID for OAuth 2.0." },
+        "youtubeClientId": { "type": "string", "description": "Public Google/YouTube OAuth Client ID." },
+        "appDownloadUrl": { "type": "string", "description": "Optional public HTTPS URL to download/install the Android APK release." },
+        "updatedBy": { "type": "string", "description": "Admin UID." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp." }
+      },
+      "required": ["maxDailyUploadsPerUser", "maxVideoSizeMb", "maxVideoDurationSec", "maintenanceMode", "updatedBy", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles isolated by UID with super-admin read/moderation access."
+    },
+    "/social_accounts/{accountId}": {
+      "schema": { "$ref": "#/entities/SocialAccount" },
+      "description": "Connected social platform accounts owned by users."
+    },
+    "/videos/{videoId}": {
+      "schema": { "$ref": "#/entities/VideoAsset" },
+      "description": "Creator video assets and multi-platform captions."
+    },
+    "/publishing_jobs/{jobId}": {
+      "schema": { "$ref": "#/entities/PublishingJob" },
+      "description": "Per-platform publishing jobs and post history."
+    },
+    "/scheduled_posts/{postId}": {
+      "schema": { "$ref": "#/entities/ScheduledPost" },
+      "description": "Scheduled multi-platform publishing queue."
+    },
+    "/admin_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AdminLog" },
+      "description": "Immutable API error and admin audit logs."
+    },
+    "/system_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/SystemSettings" },
+      "description": "Global fair-use limits and public API relay configuration."
+    }
+  }
+}
